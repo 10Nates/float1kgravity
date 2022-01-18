@@ -10,11 +10,11 @@ import (
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
 
 const (
-	G         = 100
 	width     = 800
 	height    = 800
 	windowmul = 1
@@ -39,6 +39,8 @@ type force struct {
 }
 
 var (
+	G      = 100
+	debug  = false
 	bodies = [numBodies]body{}
 	forces = [numBodies]force{}
 	mspt   = 0.0
@@ -189,6 +191,25 @@ func gravityTick() {
 	}
 }
 
+func controlsTick() {
+	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
+		if debug {
+			debug = false
+		} else {
+			debug = true
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+		G += 1
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyK) {
+		G -= 1
+		if G < 1 {
+			G = 1
+		}
+	}
+}
+
 //ebiten gameloop
 
 type Game struct{}
@@ -196,6 +217,7 @@ type Game struct{}
 func (g *Game) Update() error {
 	tickTime := time.Now().Nanosecond()
 
+	controlsTick()
 	gravityTick()
 
 	mspt = float64(time.Now().Nanosecond()-tickTime) / 1000000
@@ -252,8 +274,10 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		poptions.GeoM.Translate(posx, posy)
 		path.DrawImage(pimg, &poptions)
 
-		info := fmt.Sprintf("FPS:  %f / TPS:  %f / mspt: %f", ebiten.CurrentFPS(), ebiten.CurrentTPS(), mspt)
-		ebitenutil.DebugPrint(screen, info)
+		if debug {
+			info := fmt.Sprintf("FPS:  %f / TPS:  %f / mspt: %f\nG: %d", ebiten.CurrentFPS(), ebiten.CurrentTPS(), mspt, G)
+			ebitenutil.DebugPrint(screen, info)
+		}
 	}
 }
 
@@ -262,8 +286,11 @@ func (g *Game) Layout(outsideWidth, outsideHeight int) (screenWidth, screenHeigh
 }
 
 func main() {
+	// modify G & debug screen
+
 	initBodies()
 
+	//Ebiten
 	game := &Game{}
 	ebiten.SetWindowSize(width*windowmul, height*windowmul)
 	ebiten.SetWindowTitle("Float1k Gravity")
