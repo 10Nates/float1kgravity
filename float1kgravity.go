@@ -41,9 +41,11 @@ type force struct {
 var (
 	G      = 100.0
 	debug  = false
+	lines  = true
 	bodies = [numBodies]body{}
 	forces = [numBodies]force{}
 	mspt   = 0.0
+	path   *ebiten.Image
 )
 
 func newFloat1024(n float64) *big.Float {
@@ -208,6 +210,14 @@ func controlsTick() {
 			G = 1
 		}
 	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyL) {
+		path.Clear()
+		if lines {
+			lines = false
+		} else {
+			lines = true
+		}
+	}
 }
 
 //ebiten gameloop
@@ -224,13 +234,13 @@ func (g *Game) Update() error {
 	return nil
 }
 
-var path *ebiten.Image
-
 func (g *Game) Draw(screen *ebiten.Image) {
 
 	//screen.Fill(color.Black)
-	doptions := ebiten.DrawImageOptions{}
-	screen.DrawImage(path, &doptions)
+	if lines {
+		doptions := ebiten.DrawImageOptions{}
+		screen.DrawImage(path, &doptions)
+	}
 
 	for i := 0; i < numBodies; i++ {
 		clr := color.RGBA{
