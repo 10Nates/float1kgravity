@@ -39,7 +39,7 @@ type force struct {
 }
 
 var (
-	G      = 100
+	G      = 100.0
 	debug  = false
 	bodies = [numBodies]body{}
 	forces = [numBodies]force{}
@@ -275,7 +275,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		path.DrawImage(pimg, &poptions)
 
 		if debug {
-			info := fmt.Sprintf("FPS:  %f / TPS:  %f / mspt: %f\nG: %d", ebiten.CurrentFPS(), ebiten.CurrentTPS(), mspt, G)
+			info := fmt.Sprintf("FPS:  %f / TPS:  %f / mspt: %f\nG: %f", ebiten.CurrentFPS(), ebiten.CurrentTPS(), mspt, G)
 			ebitenutil.DebugPrint(screen, info)
 		}
 	}
