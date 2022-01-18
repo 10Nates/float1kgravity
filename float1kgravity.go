@@ -31,6 +31,7 @@ type body struct {
 	vx     *big.Float
 	vy     *big.Float
 	color  [3]uint8
+	dead   bool
 }
 
 type force struct {
@@ -65,6 +66,7 @@ func initBodies() {
 		vx:     newFloat1024(0),
 		vy:     newFloat1024(-10),
 		color:  [3]uint8{255, 0, 0},
+		dead:   false,
 	}
 	bodies[1] = body{
 		mass:   newFloat1024(1000),
@@ -74,6 +76,7 @@ func initBodies() {
 		vx:     newFloat1024(0),
 		vy:     newFloat1024(10),
 		color:  [3]uint8{0, 255, 0},
+		dead:   false,
 	}
 	bodies[2] = body{
 		mass:   newFloat1024(1000),
@@ -83,6 +86,7 @@ func initBodies() {
 		vx:     newFloat1024(10),
 		vy:     newFloat1024(0),
 		color:  [3]uint8{0, 0, 255},
+		dead:   false,
 	}
 	bodies[3] = body{
 		mass:   newFloat1024(1000),
@@ -92,6 +96,7 @@ func initBodies() {
 		vx:     newFloat1024(-10),
 		vy:     newFloat1024(0),
 		color:  [3]uint8{255, 255, 0},
+		dead:   false,
 	}
 
 	for i := 0; i < numBodies; i++ {
@@ -104,13 +109,31 @@ func initBodies() {
 	mspt = 1 / tps
 }
 
+func collideBodies(body1 *body, body2 *body, dx *big.Float, dy *big.Float) {
+	body1.mass.Add(body1.mass, body2.mass)                  // combine mass
+	body1.posx.Add(body1.posx, dx.Quo(dx, newFloat1024(2))) // average x
+	body1.posy.Add(body1.posy, dx.Quo(dy, newFloat1024(2))) // average y
+
+	body1.radius += body2.radius // combine radius
+
+	body1.vx.Add(body1.vx, body2.vx) // combine velocities
+	body1.vy.Add(body1.vy, body2.vy)
+
+	body1.color[0] = (body1.color[0] + body2.color[0]) / 2 // average color
+	body1.color[1] = (body1.color[1] + body2.color[1]) / 2
+	body1.color[2] = (body1.color[2] + body2.color[2]) / 2
+
+	body1.dead = false // enable
+	body2.dead = true
+}
+
 func gravityTick() {
 	//inspired by https://towardsdatascience.com/implementing-2d-physics-in-javascript-860a7b152785 (simplest implementation of gravity I found)
 
 	//calculate forces
 	for i := 0; i < numBodies; i++ {
 		for j := 0; j < numBodies; j++ {
-			if i != j {
+			if i != j && !bodies[i].dead && !bodies[j].dead {
 				//distance
 				var dx big.Float
 				dx.SetPrec(1024)
@@ -125,7 +148,7 @@ func gravityTick() {
 				var dyt big.Float // needed to keep dy
 				dyt.SetPrec(1024)
 				r.Add(dxt.Mul(&dx, &dx), dyt.Mul(&dy, &dy))
-				r.Sqrt(&r)
+				r.Sqrt(&r) // Heaviest operation here
 
 				//newtonian force
 				var f big.Float
@@ -135,6 +158,12 @@ func gravityTick() {
 				r2.SetPrec(1024)
 				r2.Mul(&r, &r) // r^2
 				f.Quo(&f, &r2) // Gm1m2/r^2
+
+				//test collision
+				if r.Cmp(newFloat1024(float64(bodies[i].radius+bodies[j].radius))) == -1 {
+					collideBodies(&bodies[i], &bodies[j], &dx, &dy)
+					continue
+				}
 
 				//distribute force between x & y
 				var fx big.Float
@@ -151,6 +180,7 @@ func gravityTick() {
 				forces[i].y.Add(forces[i].y, &fy)
 				forces[j].x.Sub(forces[j].x, &fx)
 				forces[j].y.Sub(forces[j].y, &fy)
+
 			}
 		}
 	}
