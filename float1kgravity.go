@@ -202,7 +202,6 @@ func gravityTick() {
 		for j := 0; j < numBodies; j++ {
 			if i != j && !bodies[i].dead && !bodies[j].dead {
 				distances[i][j] = findDistance(i, j)
-				fmt.Println(distances[i][j])
 			}
 		}
 	}
