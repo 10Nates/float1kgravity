@@ -19,7 +19,7 @@ const (
 	height    = 800
 	windowmul = 1
 	fps       = 60
-	tps       = 5000
+	tps       = 4800
 	numBodies = 4
 )
 
@@ -350,6 +350,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 	}
 
 	for i := 0; i < numBodies; i++ {
+		if bodies[i].dead {
+			continue
+		}
 		clr := color.RGBA{
 			R: bodies[i].color[0],
 			G: bodies[i].color[1],
