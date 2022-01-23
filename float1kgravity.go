@@ -106,25 +106,25 @@ func combineRadii(radius int64, radius2 int64) int64 {
 	//first body
 	fr1 := newFloat1024(float64(radius))
 
-	var area1 *big.Float
-	var r21 *big.Float
+	var area1 big.Float
+	var r21 big.Float
 	r21.SetPrec(1024)
 	r21.Mul(fr1, fr1)
-	area1.Mul(fpi, r21) //Pi*r^2
+	area1.Mul(fpi, &r21) //Pi*r^2
 
 	// second body
 	fr2 := newFloat1024(float64(radius2))
 
-	var area2 *big.Float
-	var r22 *big.Float
+	var area2 big.Float
+	var r22 big.Float
 	r22.SetPrec(1024)
 	r22.Mul(fr2, fr2)
-	area2.Mul(fpi, r22) //Pi*r^2
+	area2.Mul(fpi, &r22) //Pi*r^2
 
-	var areas *big.Float
-	areas.Add(area1, area2)
-	areas.Quo(areas, fpi)
-	areas.Sqrt(areas) // sqrt(A/Pi)
+	var areas big.Float
+	areas.Add(&area1, &area2)
+	areas.Quo(&areas, fpi)
+	areas.Sqrt(&areas) // sqrt(A/Pi)
 
 	intify, _ := areas.Int64()
 
@@ -150,38 +150,36 @@ func collideBodies(body1 *body, body2 *body, dx *big.Float, dy *big.Float) {
 }
 
 type distance struct {
-	r  *big.Float
-	dx *big.Float
-	dy *big.Float
+	r  big.Float
+	dx big.Float
+	dy big.Float
 }
 
-func findDistance(dist chan distance, i int, j int) {
-	if i != j && !bodies[i].dead && !bodies[j].dead {
-		//distance
-		var dx big.Float
-		dx.SetPrec(1024)
-		dx.Sub(bodies[j].posx, bodies[i].posx)
-		var dy big.Float
-		dy.SetPrec(1024)
-		dy.Sub(bodies[j].posy, bodies[i].posy)
-		var r big.Float
-		r.SetPrec(1024)
-		var dxt big.Float // needed to keep dx
-		dxt.SetPrec(1024)
-		var dyt big.Float // needed to keep dy
-		dyt.SetPrec(1024)
-		r.Add(dxt.Mul(&dx, &dx), dyt.Mul(&dy, &dy))
-		r.Sqrt(&r) // Heaviest operation here
+func findDistance(i int, j int) distance {
+	//distance
+	var dx big.Float
+	dx.SetPrec(1024)
+	dx.Sub(bodies[j].posx, bodies[i].posx)
+	var dy big.Float
+	dy.SetPrec(1024)
+	dy.Sub(bodies[j].posy, bodies[i].posy)
+	var r big.Float
+	r.SetPrec(1024)
+	var dxt big.Float // needed to keep dx
+	dxt.SetPrec(1024)
+	var dyt big.Float // needed to keep dy
+	dyt.SetPrec(1024)
+	r.Add(dxt.Mul(&dx, &dx), dyt.Mul(&dy, &dy))
+	r.Sqrt(&r) // Heaviest operation here
 
-		//store distance
-		newdist := distance{
-			r:  &r,
-			dx: &dx,
-			dy: &dy,
-		}
-
-		dist <- newdist
+	//store distance
+	newdist := distance{
+		r:  r,
+		dx: dx,
+		dy: dy,
 	}
+
+	return newdist
 }
 
 func gravityTick() {
@@ -189,39 +187,42 @@ func gravityTick() {
 
 	//initialize variables
 	distances := [numBodies][numBodies]distance{}
-	distanceschan := [numBodies][numBodies]chan distance{}
+	// distanceschan := [numBodies][numBodies]chan *distance{}
 	forces := [numBodies]force{}
 
-	// unsynchronize
+	// // unsynchronize
+	// for i := 0; i < numBodies; i++ {
+	// 	for j := 0; j < numBodies; j++ {
+	// 		distanceschan[i][j] = make(chan *distance)
+	// 	}
+	// }
+
+	//create threads (threads removed because they broke everything)
 	for i := 0; i < numBodies; i++ {
 		for j := 0; j < numBodies; j++ {
-			distanceschan[i][j] = make(chan distance, 3)
+			if i != j && !bodies[i].dead && !bodies[j].dead {
+				distances[i][j] = findDistance(i, j)
+				fmt.Println(distances[i][j])
+			}
 		}
 	}
 
-	//create threads
-	for i := 0; i < numBodies; i++ {
-		for j := 0; j < numBodies; j++ {
-			go findDistance(distanceschan[i][j], i, j)
-		}
-	}
-
-	// synchronize
-	for i := 0; i < numBodies; i++ {
-		for j := 0; j < numBodies; j++ {
-			distances[i][j] = <-distanceschan[i][j]
-		}
-	}
+	// // synchronize
+	// for i := 0; i < numBodies; i++ {
+	// 	for j := 0; j < numBodies; j++ {
+	// 		distances[i][j] = *<-distanceschan[i][j]
+	// 	}
+	// }
 
 	//test collisions
 	for i := 0; i < numBodies; i++ {
 		for j := 0; j < numBodies; j++ {
 			if i != j && !bodies[i].dead && !bodies[j].dead {
-				r := distances[i][j].r
-				dx := distances[i][j].dx
-				dy := distances[i][j].dy
+				r := &distances[i][j].r
+				dx := &distances[i][j].dx
+				dy := &distances[i][j].dy
 
-				if newFloat1024(float64(bodies[i].radius+bodies[j].radius)).Cmp(r) == 1 {
+				if r.Cmp(newFloat1024(float64(bodies[i].radius+bodies[j].radius))) == -1 {
 					collideBodies(&bodies[i], &bodies[j], dx, dy)
 				}
 			}
@@ -232,34 +233,34 @@ func gravityTick() {
 	for i := 0; i < numBodies; i++ {
 		for j := 0; j < numBodies; j++ {
 			if i != j && !bodies[i].dead && !bodies[j].dead {
-				r := distances[i][j].r
-				dx := distances[i][j].dx
-				dy := distances[i][j].dy
+				r := &distances[i][j].r
+				dx := &distances[i][j].dx
+				dy := &distances[i][j].dy
 
 				//newtonian force
-				var f *big.Float
+				var f big.Float
 				f.SetPrec(1024)
-				f.Mul(bodies[i].mass, bodies[j].mass).Mul(f, newFloat1024(G)) // Gm1m2
-				var r2 *big.Float
+				f.Mul(bodies[i].mass, bodies[j].mass).Mul(&f, newFloat1024(G)) // Gm1m2
+				var r2 big.Float
 				r2.SetPrec(1024)
-				r2.Mul(r, r) // r^2
-				f.Quo(f, r2) // Gm1m2/r^2
+				r2.Mul(r, r)   // r^2
+				f.Quo(&f, &r2) // Gm1m2/r^2
 
 				//distribute force between x & y
-				var fx *big.Float
+				var fx big.Float
 				fx.SetPrec(1024)
-				fx.Mul(f, dx)
-				fx.Quo(fx, r)
-				var fy *big.Float
+				fx.Mul(&f, dx)
+				fx.Quo(&fx, r)
+				var fy big.Float
 				fy.SetPrec(1024)
-				fy.Mul(f, dy)
-				fy.Quo(fy, r)
+				fy.Mul(&f, dy)
+				fy.Quo(&fy, r)
 
 				//distribute force between i & j
-				forces[i].x.Add(forces[i].x, fx)
-				forces[i].y.Add(forces[i].y, fy)
-				forces[j].x.Sub(forces[j].x, fx)
-				forces[j].y.Sub(forces[j].y, fy)
+				forces[i].x.Add(forces[i].x, &fx)
+				forces[i].y.Add(forces[i].y, &fy)
+				forces[j].x.Sub(forces[j].x, &fx)
+				forces[j].y.Sub(forces[j].y, &fy)
 
 			}
 		}
@@ -271,28 +272,28 @@ func gravityTick() {
 
 	for i := 0; i < numBodies; i++ {
 
-		var ax *big.Float // acceleration x
+		var ax big.Float // acceleration x
 		ax.SetPrec(1024)
 		ax.Quo(forces[i].x, bodies[i].mass)
 
-		var ay *big.Float // acceleration y
+		var ay big.Float // acceleration y
 		ay.SetPrec(1024)
 		ay.Quo(forces[i].y, bodies[i].mass)
 
-		ax.Mul(ax, &dt)                    // maybe required?
-		bodies[i].vx.Add(bodies[i].vx, ax) // add acceleration to velocities
-		ay.Mul(ay, &dt)                    // maybe required?
-		bodies[i].vy.Add(bodies[i].vy, ay)
+		ax.Mul(&ax, &dt)                    // maybe required?
+		bodies[i].vx.Add(bodies[i].vx, &ax) // add acceleration to velocities
+		ay.Mul(&ay, &dt)                    // maybe required?
+		bodies[i].vy.Add(bodies[i].vy, &ay)
 
-		var vx *big.Float
+		var vx big.Float
 		vx.SetPrec(1024)
-		vx.Mul(bodies[i].vx, &dt)              // velocity * time
-		bodies[i].posx.Add(bodies[i].posx, vx) //change x position
+		vx.Mul(bodies[i].vx, &dt)               // velocity * time
+		bodies[i].posx.Add(bodies[i].posx, &vx) //change x position
 
-		var vy *big.Float
+		var vy big.Float
 		vy.SetPrec(1024)
-		vy.Mul(bodies[i].vy, &dt)              // velocity * time
-		bodies[i].posy.Add(bodies[i].posy, vy) //change y position
+		vy.Mul(bodies[i].vy, &dt)               // velocity * time
+		bodies[i].posy.Add(bodies[i].posy, &vy) //change y position
 	}
 }
 
