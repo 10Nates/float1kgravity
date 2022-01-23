@@ -189,6 +189,10 @@ func gravityTick() {
 	distances := [numBodies][numBodies]distance{}
 	// distanceschan := [numBodies][numBodies]chan *distance{}
 	forces := [numBodies]force{}
+	for i := 0; i < numBodies; i++ {
+		forces[i].x = newFloat1024(0)
+		forces[i].y = newFloat1024(0)
+	}
 
 	// // unsynchronize
 	// for i := 0; i < numBodies; i++ {
