@@ -3,7 +3,7 @@
 <br>
 
 ## What is it?
-It's a basic newtonian gravity simulation written in Go using floating point numbers with 1024 bits of accuracy. It is currently single threaded because when I tried to implement threads it totally broke. Feel free to contribute.
+It's a basic newtonian gravity simulation written in Go using floating point numbers with 1024 bits of accuracy. Distance calculation & intersection detection is multithreaded, although the effectiveness of said multithreading is arguable.
 
 <br>
 

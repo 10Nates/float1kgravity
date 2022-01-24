@@ -150,19 +150,20 @@ func collideBodies(body1 *body, body2 *body, dx *big.Float, dy *big.Float) {
 }
 
 type distance struct {
-	r  big.Float
-	dx big.Float
-	dy big.Float
+	r  *big.Float
+	dx *big.Float
+	dy *big.Float
+	tc *int
 }
 
-func findDistance(i int, j int) distance {
+func findDistance(bodies1 body, bodies2 body, dist chan *distance) distance {
 	//distance
 	var dx big.Float
 	dx.SetPrec(1024)
-	dx.Sub(bodies[j].posx, bodies[i].posx)
+	dx.Sub(bodies2.posx, bodies1.posx)
 	var dy big.Float
 	dy.SetPrec(1024)
-	dy.Sub(bodies[j].posy, bodies[i].posy)
+	dy.Sub(bodies2.posy, bodies1.posy)
 	var r big.Float
 	r.SetPrec(1024)
 	var dxt big.Float // needed to keep dx
@@ -172,13 +173,17 @@ func findDistance(i int, j int) distance {
 	r.Add(dxt.Mul(&dx, &dx), dyt.Mul(&dy, &dy))
 	r.Sqrt(&r) // Heaviest operation here
 
+	testCollision := r.Cmp(newFloat1024(float64(bodies1.radius + bodies2.radius)))
+
 	//store distance
 	newdist := distance{
-		r:  r,
-		dx: dx,
-		dy: dy,
+		r:  &r,
+		dx: &dx,
+		dy: &dy,
+		tc: &testCollision,
 	}
 
+	dist <- &newdist
 	return newdist
 }
 
@@ -187,45 +192,49 @@ func gravityTick() {
 
 	//initialize variables
 	distances := [numBodies][numBodies]distance{}
-	// distanceschan := [numBodies][numBodies]chan *distance{}
+	distanceschan := [numBodies][numBodies]chan *distance{}
 	forces := [numBodies]force{}
 	for i := 0; i < numBodies; i++ {
 		forces[i].x = newFloat1024(0)
 		forces[i].y = newFloat1024(0)
 	}
 
-	// // unsynchronize
-	// for i := 0; i < numBodies; i++ {
-	// 	for j := 0; j < numBodies; j++ {
-	// 		distanceschan[i][j] = make(chan *distance)
-	// 	}
-	// }
+	// unsynchronize
+	for i := 0; i < numBodies; i++ {
+		for j := 0; j < numBodies; j++ {
+			distanceschan[i][j] = make(chan *distance)
+		}
+	}
 
 	//create threads (threads removed because they broke everything)
 	for i := 0; i < numBodies; i++ {
 		for j := 0; j < numBodies; j++ {
 			if i != j && !bodies[i].dead && !bodies[j].dead {
-				distances[i][j] = findDistance(i, j)
+				go findDistance(bodies[i], bodies[j], distanceschan[i][j])
 			}
 		}
 	}
 
-	// // synchronize
-	// for i := 0; i < numBodies; i++ {
-	// 	for j := 0; j < numBodies; j++ {
-	// 		distances[i][j] = *<-distanceschan[i][j]
-	// 	}
-	// }
+	// synchronize
+	for i := 0; i < numBodies; i++ {
+		for j := 0; j < numBodies; j++ {
+			if i != j && !bodies[i].dead && !bodies[j].dead {
+				distances[i][j] = *<-distanceschan[i][j]
+			} else {
+				close(distanceschan[i][j])
+			}
+		}
+	}
 
 	//test collisions
 	for i := 0; i < numBodies; i++ {
 		for j := 0; j < numBodies; j++ {
 			if i != j && !bodies[i].dead && !bodies[j].dead {
-				r := &distances[i][j].r
-				dx := &distances[i][j].dx
-				dy := &distances[i][j].dy
+				dx := distances[i][j].dx
+				dy := distances[i][j].dy
+				tc := distances[i][j].tc
 
-				if r.Cmp(newFloat1024(float64(bodies[i].radius+bodies[j].radius))) == -1 {
+				if *tc == -1 {
 					collideBodies(&bodies[i], &bodies[j], dx, dy)
 				}
 			}
@@ -236,9 +245,9 @@ func gravityTick() {
 	for i := 0; i < numBodies; i++ {
 		for j := 0; j < numBodies; j++ {
 			if i != j && !bodies[i].dead && !bodies[j].dead {
-				r := &distances[i][j].r
-				dx := &distances[i][j].dx
-				dy := &distances[i][j].dy
+				r := distances[i][j].r
+				dx := distances[i][j].dx
+				dy := distances[i][j].dy
 
 				//newtonian force
 				var f big.Float
